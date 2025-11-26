@@ -156,24 +156,27 @@ jobs:
         cp ../susfs4ksu/kernel_patches/50_add_susfs_in_kernel-*.patch .
         patch -p1 < 50_add_susfs_in_kernel-*.patch || echo "Patch Kernel mungkin gagal, cek log."
 
-    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES ---
+    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES (Added sucompat.c fix) ---
     - name: Fix SukiSU on Kernel 4.14
       if: env.ENABLE_KERNELSU == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/drivers/kernelsu
         
-        echo "Fixing ksu.c for Kernel 4.14..."
+        echo "Fixing ksu.c..."
         sed -i '/MODULE_IMPORT_NS/d' ksu.c
         sed -i '/module_exit(ksu_kernelsu_exit);/i void ksu_kernelsu_exit(void) {}' ksu.c
 
-        echo "Fixing allowlist.c for Kernel 4.14..."
+        echo "Fixing allowlist.c..."
         sed -i 's/TWA_RESUME/true/g' allowlist.c
         sed -i '1i #include <linux/sched/task.h>' allowlist.c
 
-        echo "Fixing app_profile.c for Kernel 4.14..."
-        # Hapus baris yang akses filter_count karena struct seccomp beda di 4.14
+        echo "Fixing app_profile.c..."
         sed -i '/filter_count/d' app_profile.c
-    # ------------------------------------------
+        
+        echo "Fixing sucompat.c (strncpy_from_user_nofault)..."
+        # Ganti fungsi nofault (kernel 5.x) ke fungsi biasa (kernel 4.14)
+        sed -i 's/strncpy_from_user_nofault/strncpy_from_user/g' sucompat.c
+    # ----------------------------------------------------------------
 
     - name: Setup Configuration for kernel
       run: |
