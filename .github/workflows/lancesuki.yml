@@ -131,8 +131,6 @@ jobs:
         # Revert KSU if needed
         if [ ${{ env.KSU_REVERT }} == 'true' ]; then
              echo "Reverting existing KernelSU..."
-             # Tambahkan logika revert spesifik jika source Jbub5 sudah ada KSU
-             # Karena kita pakai SukiSU setup script, biasanya dia akan menimpa/handle
         fi
         
         curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash
@@ -158,16 +156,23 @@ jobs:
         cp ../susfs4ksu/kernel_patches/50_add_susfs_in_kernel-*.patch .
         patch -p1 < 50_add_susfs_in_kernel-*.patch || echo "Patch Kernel mungkin gagal, cek log."
 
+    # --- BAGIAN PENTING YANG DIUPDATE ---
     - name: Fix SukiSU on Kernel 4.14
       if: env.ENABLE_KERNELSU == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/drivers/kernelsu
         
-        echo "Fixing MODULE_IMPORT_NS error..."
+        echo "Fixing ksu.c for Kernel 4.14..."
         sed -i '/MODULE_IMPORT_NS/d' ksu.c
-        
-        echo "Fixing ksu_kernelsu_exit error..."
         sed -i '/module_exit(ksu_kernelsu_exit);/i void ksu_kernelsu_exit(void) {}' ksu.c
+
+        echo "Fixing allowlist.c for Kernel 4.14..."
+        # Ganti TWA_RESUME dengan 'true' karena kernel 4.14 pakai boolean notify
+        sed -i 's/TWA_RESUME/true/g' allowlist.c
+        
+        # Tambahkan header sched/task.h agar put_task_struct terbaca
+        sed -i '1i #include <linux/sched/task.h>' allowlist.c
+    # ------------------------------------
 
     - name: Setup Configuration for kernel
       run: |
