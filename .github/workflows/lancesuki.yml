@@ -1,4 +1,4 @@
-name: Build Kernel (SukiSU + SUSFS) - DEBUG MODE
+name: Build Kernel (SukiSU + SUSFS)
 on:
   workflow_dispatch:
     inputs:
@@ -184,7 +184,8 @@ jobs:
         echo "Fixing throne_tracker.c..."
         sed -i 's/is_manager_apk/ksu_is_manager_apk/g' throne_tracker.c
         sed -i '1i #include <linux/types.h>' throne_tracker.c
-        sed -i '2i extern bool ksu_is_manager_apk(const char *path);' throne_tracker.c
+        # FIX: Hapus 'const' agar match dengan apk_sign.h (char *path)
+        sed -i '2i extern bool ksu_is_manager_apk(char *path);' throne_tracker.c
     # ------------------------------------------
 
     - name: Setup Configuration for kernel
@@ -254,12 +255,9 @@ jobs:
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # Build Defconfig (masih parallel biar cepet)
+        # Kembalikan ke Multi-thread agar cepat
         make -j$(nproc --all) CC=clang O=out ARCH=${{ env.KERNEL_ARCH }} ${{ env.EXTRA_CMDS }} ${DEVICE}_defconfig
-        
-        # Build Image (SINGLE THREAD - DEBUG MODE)
-        echo "Starting build with -j1 for debugging..."
-        make -j1 CC=clang O=out ARCH=${{ env.KERNEL_ARCH }} ${{ env.EXTRA_CMDS }}
+        make -j$(nproc --all) CC=clang O=out ARCH=${{ env.KERNEL_ARCH }} ${{ env.EXTRA_CMDS }}
 
     - name: Check a kernel output files
       run: |
