@@ -160,6 +160,24 @@ jobs:
         cp ../susfs4ksu/kernel_patches/50_add_susfs_in_kernel-*.patch .
         patch -p1 < 50_add_susfs_in_kernel-*.patch || echo "Patch Kernel mungkin gagal, cek log."
 
+    # --- TAMBAHKAN BAGIAN INI ---
+    - name: Fix SukiSU on Kernel 4.14
+      if: env.ENABLE_KERNELSU == 'true'
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/drivers/kernelsu
+        
+        echo "Fixing MODULE_IMPORT_NS error..."
+        # Hapus baris MODULE_IMPORT_NS karena tidak didukung kernel 4.14
+        sed -i '/MODULE_IMPORT_NS/d' ksu.c
+        
+        echo "Fixing ksu_kernelsu_exit error..."
+        # Tambahkan fungsi kosong ksu_kernelsu_exit agar compiler tidak protes
+        sed -i '/module_exit(ksu_kernelsu_exit);/i void ksu_kernelsu_exit(void) {}' ksu.c
+    # ----------------------------
+
+    - name: Setup Configuration for kernel
+      # ... (lanjut ke langkah config seperti biasa)
+
     - name: Setup Configuration for kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
