@@ -146,12 +146,12 @@ jobs:
         rsync -av susfs4ksu/kernel_patches/fs/ android-kernel/fs/
         rsync -av susfs4ksu/kernel_patches/include/linux/ android-kernel/include/linux/
 
-        # Apply Patch KernelSU (Ignore fail)
+        # Apply Patch KernelSU
         cd android-kernel/KernelSU
         cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch .
         patch -p1 < 10_enable_susfs_for_ksu.patch || echo "Patch KSU conflict, proceeding..."
 
-        # Apply Patch Kernel (Ignore fail)
+        # Apply Patch Kernel
         cd ..
         cp ../susfs4ksu/kernel_patches/50_add_susfs_in_kernel-*.patch .
         patch -p1 < 50_add_susfs_in_kernel-*.patch || echo "Patch Kernel conflict, proceeding..."
@@ -186,11 +186,13 @@ jobs:
         sed -i '1i #include <linux/types.h>' throne_tracker.c
         sed -i '2i extern bool ksu_is_manager_apk(char *path);' throne_tracker.c
 
-        echo "Fixing pkg_observer.c (Robust Method)..."
-        # 1. Hapus assignment .handle_inode_event
+        echo "Fixing pkg_observer.c..."
         sed -i '/\.handle_inode_event/d' pkg_observer.c
-        # 2. Inject macro dummy fsnotify_add_inode_mark agar dianggap 0 (false)
         sed -i '1i #define fsnotify_add_inode_mark(m,i,f) (0)' pkg_observer.c
+
+        echo "Fixing umount_manager.c (Missing MNT_DETACH)..."
+        # Define MNT_DETACH manual (nilai 0x00000002)
+        sed -i '1i #ifndef MNT_DETACH\n#define MNT_DETACH 2\n#endif' umount_manager.c
     # ------------------------------------------
 
     - name: Setup Configuration for kernel
