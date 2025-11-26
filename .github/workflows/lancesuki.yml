@@ -23,54 +23,16 @@ jobs:
     name: Build Kernel by ${{ github.actor }}
     runs-on: ubuntu-24.04
     env:
-      # --- CONFIGURATION START ---
       DEVICE: ${{ github.event.inputs.select_device }}
       SUSFS_BRANCH: ${{ github.event.inputs.kernel_version }}
-      
-      # Kernel Source
-      KERNEL_SOURCE: "https://github.com/Redmi-MT6768/android_kernel_xiaomi_mt6768"
-      KERNEL_SOURCE_BRANCH: "4.14"
-      KERNEL_IMAGE_NAME: "Image.gz-dtb"
-      KERNEL_ARCH: "arm64"
-      
-      # Toolchain (Clang & GCC)
-      USE_CLANG: "true"
-      CLANG_SOURCE: "https://github.com/ZyCromerZ/Clang/releases/download/21.0.0git-20250425-release/Clang-21.0.0git-20250425.tar.gz"
-      CLANG_BRANCH: ""
-      
-      USE_GCC: "true"
-      USE_GCC_64: "true"
-      GCC_64_SOURCE: "https://snapshots.linaro.org/gnu-toolchain/14.0-2023.06-1/aarch64-linux-gnu/gcc-linaro-14.0.0-2023.06-x86_64_aarch64-linux-gnu.tar.xz"
-      USE_GCC_32: "true"
-      GCC_32_SOURCE: "https://snapshots.linaro.org/gnu-toolchain/14.0-2023.06-1/arm-linux-gnueabihf/gcc-linaro-14.0.0-2023.06-x86_64_arm-linux-gnueabihf.tar.xz"
-      
-      # SukiSU & SUSFS
-      ENABLE_KERNELSU: "true"
-      KSU_HOOKS_PATCH: "true"
-      ADD_KPROBES_CONFIG: "true"
-      ADD_OVERLAYFS_CONFIG: "true"
-      
-      # AnyKernel3
-      USE_ANYKERNEL3: "true"
-      ANYKERNEL3_SOURCE: "https://github.com/Edhic1/AnyKernel3.git"
-      ANYKERNEL3_BRANCH: "master"
-      
-      # Build Flags
-      EXTRA_CMDS: "LLVM=1 LLVM_IAS=1 LD=ld.lld AS=llvm-as AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump READELF=llvm-readelf STRIP=llvm-strip CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabihf- CONFIG_NO_ERROR_ON_MISMATCH=y"
-      
-      # Settings
-      DISABLE_CC_WERROR: "true"
-      DISABLE_LTO: "false"
-      ENABLE_CCACHE: "true"
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
       CCACHE_NOHASHDIR: "true"
       CCACHE_HARDLINK: "true"
-      # --- CONFIGURATION END ---
-
     steps:
     - uses: actions/checkout@v4
 
     - name: Maximize build space
+      if: env.REMOVE_UNUSED_PACKAGES == 'true'
       uses: easimon/maximize-build-space@master
       with:
         root-reserve-mb: 8192
@@ -80,7 +42,15 @@ jobs:
         remove-haskell: 'true'
         remove-codeql: 'true'
 
-    # DIGANTI: Menggunakan perintah manual agar lebih stabil
+    - name: Prepare environment
+      run: |
+        if [ -f config.env ]; then
+            grep -v -E "^#|^\n" config.env | sed 's/ #.*//; s/#.*//' >> $GITHUB_ENV
+        else
+            echo "config.env not found!"
+            exit 1
+        fi
+
     - name: Create Swap File
       run: |
         sudo fallocate -l 10G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1G count=10
@@ -94,17 +64,37 @@ jobs:
       run: |
         echo "BUILD_TIME=$(TZ=UTC date "+%Y%m%d%H%M")" >> $GITHUB_ENV
         sudo apt-get update
-        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32ncurses-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses6 libncurses-dev libsdl1.2-dev libssl-dev libwxgtk3.2-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python2
+        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32ncurses-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses6 libncurses-dev libsdl1.2-dev libssl-dev libwxgtk3.2-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
+
+    - name: Install python2
+      if: env.ENABLE_PYTHON2 == 'true'
+      run: |
+        mkdir -p ~/python2-jammy && cd ~/python2-jammy
+        wget http://security.ubuntu.com/ubuntu/pool/universe/p/python2.7/python2.7_2.7.18-13ubuntu1.5_amd64.deb
+        wget http://security.ubuntu.com/ubuntu/pool/universe/p/python2.7/libpython2.7-stdlib_2.7.18-13ubuntu1.5_amd64.deb
+        wget http://security.ubuntu.com/ubuntu/pool/universe/p/python2.7/python2.7-minimal_2.7.18-13ubuntu1.5_amd64.deb
+        wget http://security.ubuntu.com/ubuntu/pool/universe/p/python2.7/libpython2.7-minimal_2.7.18-13ubuntu1.5_amd64.deb
+        sudo apt install libnsl2 -y
+        sudo dpkg -i libpython2.7-minimal_*.deb
+        sudo dpkg -i python2.7-minimal_*.deb
+        sudo dpkg -i libpython2.7-stdlib_*.deb
+        sudo dpkg -i python2.7_*.deb
+        sudo apt --fix-broken install
+        sudo ln -s /usr/bin/python2.7 /usr/local/bin/python2
+        rm -rf ~/python2-jammy
 
     - name: Download Clang
       if: env.USE_CLANG == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        wget -nv -O clang.tar.gz ${{ env.CLANG_SOURCE }}
-        mkdir clang
-        tar -C clang/ -zxvf clang.tar.gz
-        rm clang.tar.gz
+        if [[ ${{ env.CLANG_SOURCE }} == *'.tar.gz' ]]; then
+            wget -nv -O clang.tar.gz ${{ env.CLANG_SOURCE }}
+            mkdir clang
+            tar -C clang/ -zxvf clang.tar.gz
+        else
+            git clone ${{ env.CLANG_SOURCE }} -b ${{ env.CLANG_BRANCH }} clang --depth=1
+        fi
         if [[ "$(find ./clang -mindepth 1 -maxdepth 1 -type d | wc -l)" == "1" ]]; then
             mv -f "$(find ./clang -mindepth 1 -maxdepth 1 -type d)"/* ./clang
         fi
@@ -117,16 +107,13 @@ jobs:
         wget -nv -O gcc-64.tar.xz ${{ env.GCC_64_SOURCE }}
         mkdir gcc-64
         tar -C gcc-64/ -Jxvf gcc-64.tar.xz
-        rm gcc-64.tar.xz
         if [[ "$(find ./gcc-64 -mindepth 1 -maxdepth 1 -type d | wc -l)" == "1" ]]; then
             mv -f "$(find ./gcc-64 -mindepth 1 -maxdepth 1 -type d)"/* ./gcc-64
         fi
-        
         # GCC 32
         wget -nv -O gcc-32.tar.xz ${{ env.GCC_32_SOURCE }}
         mkdir gcc-32
         tar -C gcc-32/ -Jxvf gcc-32.tar.xz
-        rm gcc-32.tar.xz
         if [[ "$(find ./gcc-32 -mindepth 1 -maxdepth 1 -type d | wc -l)" == "1" ]]; then
             mv -f "$(find ./gcc-32 -mindepth 1 -maxdepth 1 -type d)"/* ./gcc-32
         fi
@@ -134,13 +121,22 @@ jobs:
     - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        echo "Cloning Kernel Source: ${{ env.KERNEL_SOURCE }}"
         git clone --recursive ${{ env.KERNEL_SOURCE }} -b ${{ env.KERNEL_SOURCE_BRANCH }} android-kernel --depth=1
 
     - name: Setup SukiSU (Base)
       if: env.ENABLE_KERNELSU == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        
+        # Revert KSU if needed (based on config)
+        if [ ${{ env.KSU_REVERT }} == 'true' ]; then
+             echo "Reverting existing KernelSU..."
+             # Logic revert manual jika patch ada di repo patch, atau git revert jika commit history ada
+             # Disini kita asumsikan pakai patch revert umum jika tersedia di repo workspace
+             # Atau skip jika repo bersih. 
+             # Jbub5 mungkin sudah ada KSU, setup.sh SukiSU biasanya handle ini jika bersih.
+        fi
+        
         curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash
         echo "UPLOADNAME=-SukiSU-SUSFS" >> $GITHUB_ENV
 
@@ -150,7 +146,7 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace
         git clone https://gitlab.com/simonpunk/susfs4ksu.git -b ${{ env.SUSFS_BRANCH }}
         
-        # Copy file manual
+        # Copy manual
         rsync -av susfs4ksu/kernel_patches/fs/ android-kernel/fs/
         rsync -av susfs4ksu/kernel_patches/include/linux/ android-kernel/include/linux/
 
@@ -170,7 +166,6 @@ jobs:
         
         # SukiSU & SUSFS Configs
         if [ ${{ env.ENABLE_KERNELSU }} = true ]; then
-            # Pastikan CONFIG_KSU aktif
             if grep -q "CONFIG_KSU" arch/${{ env.KERNEL_ARCH }}/configs/${DEVICE}_defconfig; then
                 sed -i 's/# CONFIG_KSU is not set/CONFIG_KSU=y/g' arch/${{ env.KERNEL_ARCH }}/configs/${DEVICE}_defconfig
                 sed -i 's/CONFIG_KSU=n/CONFIG_KSU=y/g' arch/${{ env.KERNEL_ARCH }}/configs/${DEVICE}_defconfig
@@ -210,6 +205,17 @@ jobs:
         if [ ${{ env.ADD_OVERLAYFS_CONFIG }} = true ]; then
             echo "CONFIG_OVERLAY_FS=y" >> arch/${{ env.KERNEL_ARCH }}/configs/${DEVICE}_defconfig
         fi
+        
+        if [ ${{ env.DISABLE_CC_WERROR }} = true ]; then
+            echo "CONFIG_CC_WERROR=n" >> arch/${{ env.KERNEL_ARCH }}/configs/${DEVICE}_defconfig
+        fi
+
+    - name: Setup ccache
+      if: env.ENABLE_CCACHE == 'true'
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: build-kernel-${{ env.DEVICE }}${{ env.UPLOADNAME }}
+        max-size: 2G
 
     - name: Build kernel
       run: |
@@ -221,6 +227,7 @@ jobs:
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
+        # Build Command
         make -j$(nproc --all) CC=clang O=out ARCH=${{ env.KERNEL_ARCH }} ${{ env.EXTRA_CMDS }} ${DEVICE}_defconfig
         make -j$(nproc --all) CC=clang O=out ARCH=${{ env.KERNEL_ARCH }} ${{ env.EXTRA_CMDS }}
 
@@ -238,7 +245,13 @@ jobs:
       if: env.CHECK_FILE_IS_OK == 'true' && env.USE_ANYKERNEL3 == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone ${{ env.ANYKERNEL3_SOURCE }} -b ${{ env.ANYKERNEL3_BRANCH }} --depth=1 AnyKernel3
+        if [[ ${{ env.ANYKERNEL3_SOURCE }} == *'.tar.gz' ]]; then
+            wget -nv -O AnyKernel3.tar.gz ${{ env.ANYKERNEL3_SOURCE }}
+            mkdir AnyKernel3
+            tar -C AnyKernel3/ -zxvf AnyKernel3.tar.gz
+        else
+            git clone ${{ env.ANYKERNEL3_SOURCE }} -b ${{ env.ANYKERNEL3_BRANCH }} --depth=1 AnyKernel3
+        fi
         
         cp android-kernel/out/arch/${{ env.KERNEL_ARCH }}/boot/${{ env.KERNEL_IMAGE_NAME }} AnyKernel3/
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
@@ -247,12 +260,12 @@ jobs:
       if: env.CHECK_FILE_IS_OK == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: AnyKernel3${{ env.UPLOADNAME }}-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
+        name: AnyKernel3${{ env.LOCALVERSION }}${{ env.UPLOADNAME }}-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
         path: kernel_workspace/AnyKernel3/*
 
     - name: Upload kernel image
       if: env.CHECK_FILE_IS_OK == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.KERNEL_IMAGE_NAME }}${{ env.UPLOADNAME }}-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
+        name: ${{ env.KERNEL_IMAGE_NAME }}${{ env.LOCALVERSION }}${{ env.UPLOADNAME }}-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
         path: kernel_workspace/android-kernel/out/arch/${{ env.KERNEL_ARCH }}/boot/${{ env.KERNEL_IMAGE_NAME }}
