@@ -156,7 +156,7 @@ jobs:
         cp ../susfs4ksu/kernel_patches/50_add_susfs_in_kernel-*.patch .
         patch -p1 < 50_add_susfs_in_kernel-*.patch || echo "Patch Kernel mungkin gagal, cek log."
 
-    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES (Added sucompat.c fix) ---
+    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES ---
     - name: Fix SukiSU on Kernel 4.14
       if: env.ENABLE_KERNELSU == 'true'
       run: |
@@ -173,10 +173,17 @@ jobs:
         echo "Fixing app_profile.c..."
         sed -i '/filter_count/d' app_profile.c
         
-        echo "Fixing sucompat.c (strncpy_from_user_nofault)..."
-        # Ganti fungsi nofault (kernel 5.x) ke fungsi biasa (kernel 4.14)
+        echo "Fixing sucompat.c..."
         sed -i 's/strncpy_from_user_nofault/strncpy_from_user/g' sucompat.c
-    # ----------------------------------------------------------------
+        
+        echo "Fixing syscall_hook_manager.c (New)..."
+        # Hapus 'case __NR_clone3:'
+        sed -i '/case __NR_clone3:/d' syscall_hook_manager.c
+        # Hapus '|| id == __NR_clone3'
+        sed -i 's/|| id == __NR_clone3//g' syscall_hook_manager.c
+        # Ganti strncpy_from_user_nofault
+        sed -i 's/strncpy_from_user_nofault/strncpy_from_user/g' syscall_hook_manager.c
+    # ------------------------------------------
 
     - name: Setup Configuration for kernel
       run: |
