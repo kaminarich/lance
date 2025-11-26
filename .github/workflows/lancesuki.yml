@@ -1,4 +1,4 @@
-name: Build Kernel (SukiSU + SUSFS)
+name: Build Kernel (SukiSU + SUSFS) - DEBUG MODE
 on:
   workflow_dispatch:
     inputs:
@@ -183,7 +183,6 @@ jobs:
         
         echo "Fixing throne_tracker.c..."
         sed -i 's/is_manager_apk/ksu_is_manager_apk/g' throne_tracker.c
-        # Inject header types.h agar bool dikenali, baru deklarasi fungsi
         sed -i '1i #include <linux/types.h>' throne_tracker.c
         sed -i '2i extern bool ksu_is_manager_apk(const char *path);' throne_tracker.c
     # ------------------------------------------
@@ -255,9 +254,12 @@ jobs:
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # Build Command
+        # Build Defconfig (masih parallel biar cepet)
         make -j$(nproc --all) CC=clang O=out ARCH=${{ env.KERNEL_ARCH }} ${{ env.EXTRA_CMDS }} ${DEVICE}_defconfig
-        make -j$(nproc --all) CC=clang O=out ARCH=${{ env.KERNEL_ARCH }} ${{ env.EXTRA_CMDS }}
+        
+        # Build Image (SINGLE THREAD - DEBUG MODE)
+        echo "Starting build with -j1 for debugging..."
+        make -j1 CC=clang O=out ARCH=${{ env.KERNEL_ARCH }} ${{ env.EXTRA_CMDS }}
 
     - name: Check a kernel output files
       run: |
