@@ -156,7 +156,7 @@ jobs:
         cp ../susfs4ksu/kernel_patches/50_add_susfs_in_kernel-*.patch .
         patch -p1 < 50_add_susfs_in_kernel-*.patch || echo "Patch Kernel mungkin gagal, cek log."
 
-    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES (INCLUDING THRONE_TRACKER) ---
+    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES ---
     - name: Fix SukiSU on Kernel 4.14
       if: env.ENABLE_KERNELSU == 'true'
       run: |
@@ -181,12 +181,12 @@ jobs:
         sed -i 's/|| id == __NR_clone3//g' syscall_hook_manager.c
         sed -i 's/strncpy_from_user_nofault/strncpy_from_user/g' syscall_hook_manager.c
         
-        echo "Fixing throne_tracker.c (NEW)..."
-        # Ganti is_manager_apk -> ksu_is_manager_apk
+        echo "Fixing throne_tracker.c..."
         sed -i 's/is_manager_apk/ksu_is_manager_apk/g' throne_tracker.c
-        # Tambahkan deklarasi explicit di awal file agar compiler tau
-        sed -i '1i extern bool ksu_is_manager_apk(const char *path);' throne_tracker.c
-    # ---------------------------------------------------------------------
+        # Inject header types.h agar bool dikenali, baru deklarasi fungsi
+        sed -i '1i #include <linux/types.h>' throne_tracker.c
+        sed -i '2i extern bool ksu_is_manager_apk(const char *path);' throne_tracker.c
+    # ------------------------------------------
 
     - name: Setup Configuration for kernel
       run: |
