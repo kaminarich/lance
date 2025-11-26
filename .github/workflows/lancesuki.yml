@@ -146,16 +146,15 @@ jobs:
         rsync -av susfs4ksu/kernel_patches/fs/ android-kernel/fs/
         rsync -av susfs4ksu/kernel_patches/include/linux/ android-kernel/include/linux/
 
-        # Apply Patch KernelSU (Akan banyak reject karena beda versi, kita ignore dan fix manual)
+        # Apply Patch KernelSU (Ignore fail)
         cd android-kernel/KernelSU
-        # Kita coba apply, tapi jangan exit jika fail
         cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch .
-        patch -p1 < 10_enable_susfs_for_ksu.patch || echo "Patch KSU conflict (Expected on SukiSU v4), proceeding with manual fixes..."
+        patch -p1 < 10_enable_susfs_for_ksu.patch || echo "Patch KSU conflict, proceeding..."
 
-        # Apply Patch Kernel (Ini yang penting harus sukses sebagian besar)
+        # Apply Patch Kernel (Ignore fail)
         cd ..
         cp ../susfs4ksu/kernel_patches/50_add_susfs_in_kernel-*.patch .
-        patch -p1 < 50_add_susfs_in_kernel-*.patch || echo "Patch Kernel conflict, check logs."
+        patch -p1 < 50_add_susfs_in_kernel-*.patch || echo "Patch Kernel conflict, proceeding..."
 
     # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES ---
     - name: Fix SukiSU on Kernel 4.14
@@ -185,14 +184,13 @@ jobs:
         echo "Fixing throne_tracker.c..."
         sed -i 's/is_manager_apk/ksu_is_manager_apk/g' throne_tracker.c
         sed -i '1i #include <linux/types.h>' throne_tracker.c
-        # Pastikan char *path sama dengan header
         sed -i '2i extern bool ksu_is_manager_apk(char *path);' throne_tracker.c
 
-        echo "Fixing pkg_observer.c (Disable due to API mismatch)..."
-        # Hapus assignment .handle_inode_event agar tidak error struct member
+        echo "Fixing pkg_observer.c (Robust Method)..."
+        # 1. Hapus assignment .handle_inode_event
         sed -i '/\.handle_inode_event/d' pkg_observer.c
-        # Ganti panggilan fsnotify_add_inode_mark dengan 0 (disable logic)
-        sed -i 's/fsnotify_add_inode_mark.*/0;/' pkg_observer.c
+        # 2. Inject macro dummy fsnotify_add_inode_mark agar dianggap 0 (false)
+        sed -i '1i #define fsnotify_add_inode_mark(m,i,f) (0)' pkg_observer.c
     # ------------------------------------------
 
     - name: Setup Configuration for kernel
