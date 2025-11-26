@@ -128,13 +128,11 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # Revert KSU if needed (based on config)
+        # Revert KSU if needed
         if [ ${{ env.KSU_REVERT }} == 'true' ]; then
              echo "Reverting existing KernelSU..."
-             # Logic revert manual jika patch ada di repo patch, atau git revert jika commit history ada
-             # Disini kita asumsikan pakai patch revert umum jika tersedia di repo workspace
-             # Atau skip jika repo bersih. 
-             # Jbub5 mungkin sudah ada KSU, setup.sh SukiSU biasanya handle ini jika bersih.
+             # Tambahkan logika revert spesifik jika source Jbub5 sudah ada KSU
+             # Karena kita pakai SukiSU setup script, biasanya dia akan menimpa/handle
         fi
         
         curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash
@@ -160,23 +158,16 @@ jobs:
         cp ../susfs4ksu/kernel_patches/50_add_susfs_in_kernel-*.patch .
         patch -p1 < 50_add_susfs_in_kernel-*.patch || echo "Patch Kernel mungkin gagal, cek log."
 
-    # --- TAMBAHKAN BAGIAN INI ---
     - name: Fix SukiSU on Kernel 4.14
       if: env.ENABLE_KERNELSU == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/drivers/kernelsu
         
         echo "Fixing MODULE_IMPORT_NS error..."
-        # Hapus baris MODULE_IMPORT_NS karena tidak didukung kernel 4.14
         sed -i '/MODULE_IMPORT_NS/d' ksu.c
         
         echo "Fixing ksu_kernelsu_exit error..."
-        # Tambahkan fungsi kosong ksu_kernelsu_exit agar compiler tidak protes
         sed -i '/module_exit(ksu_kernelsu_exit);/i void ksu_kernelsu_exit(void) {}' ksu.c
-    # ----------------------------
-
-    - name: Setup Configuration for kernel
-      # ... (lanjut ke langkah config seperti biasa)
 
     - name: Setup Configuration for kernel
       run: |
