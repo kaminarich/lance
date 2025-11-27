@@ -190,9 +190,12 @@ jobs:
         sed -i '/\.handle_inode_event/d' pkg_observer.c
         sed -i '1i #define fsnotify_add_inode_mark(m,i,f) (0)' pkg_observer.c
 
-        echo "Fixing umount_manager.c (Missing MNT_DETACH)..."
-        # Define MNT_DETACH manual (nilai 0x00000002)
+        echo "Fixing umount_manager.c..."
         sed -i '1i #ifndef MNT_DETACH\n#define MNT_DETACH 2\n#endif' umount_manager.c
+
+        echo "Fixing setuid_hook.c (New)..."
+        # Kernel 4.14 force_sig butuh 2 argumen: force_sig(SIGKILL, current)
+        sed -i 's/force_sig(SIGKILL)/force_sig(SIGKILL, current)/g' setuid_hook.c
     # ------------------------------------------
 
     - name: Setup Configuration for kernel
