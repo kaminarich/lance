@@ -156,7 +156,7 @@ jobs:
         cp ../susfs4ksu/kernel_patches/50_add_susfs_in_kernel-*.patch .
         patch -p1 < 50_add_susfs_in_kernel-*.patch || echo "Patch Kernel conflict, proceeding..."
 
-    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES ---
+    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES (New Fix: kernel_umount.c) ---
     - name: Fix SukiSU on Kernel 4.14
       if: env.ENABLE_KERNELSU == 'true'
       run: |
@@ -193,9 +193,11 @@ jobs:
         echo "Fixing umount_manager.c..."
         sed -i '1i #ifndef MNT_DETACH\n#define MNT_DETACH 2\n#endif' umount_manager.c
 
-        echo "Fixing setuid_hook.c (New)..."
-        # Kernel 4.14 force_sig butuh 2 argumen: force_sig(SIGKILL, current)
+        echo "Fixing setuid_hook.c..."
         sed -i 's/force_sig(SIGKILL)/force_sig(SIGKILL, current)/g' setuid_hook.c
+
+        echo "Fixing kernel_umount.c (NEW)..."
+        sed -i 's/TWA_RESUME/true/g' kernel_umount.c
     # ------------------------------------------
 
     - name: Setup Configuration for kernel
