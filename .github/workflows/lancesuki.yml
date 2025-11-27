@@ -156,7 +156,7 @@ jobs:
         cp ../susfs4ksu/kernel_patches/50_add_susfs_in_kernel-*.patch .
         patch -p1 < 50_add_susfs_in_kernel-*.patch || echo "Patch Kernel conflict, proceeding..."
 
-    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES (New Fix: ksud.c) ---
+    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES (New Fix: file_wrapper.c) ---
     - name: Fix SukiSU on Kernel 4.14
       if: env.ENABLE_KERNELSU == 'true'
       run: |
@@ -205,9 +205,18 @@ jobs:
         sed -i '1i #define anon_inode_getfd_secure(name, fops, priv, flags, context) anon_inode_getfd(name, fops, priv, flags)' supercalls.c
         sed -i '1i #define selinux_inode(inode) (inode->i_security)' supercalls.c
 
-        echo "Fixing ksud.c (NEW)..."
+        echo "Fixing ksud.c..."
         sed -i 's/strncpy_from_user_nofault/strncpy_from_user/g' ksud.c
         sed -i 's/TWA_RESUME/true/g' ksud.c
+
+        echo "Fixing file_wrapper.c (Major)..."
+        # 1. __poll_t -> unsigned int
+        sed -i 's/__poll_t/unsigned int/g' file_wrapper.c
+        # 2. Hapus fungsi yang tidak ada (iopoll, remap_file_range, fadvise, mmap_supported_flags)
+        sed -i '/iopoll/d' file_wrapper.c
+        sed -i '/remap_file_range/d' file_wrapper.c
+        sed -i '/fadvise/d' file_wrapper.c
+        sed -i '/mmap_supported_flags/d' file_wrapper.c
     # ------------------------------------------
 
     - name: Setup Configuration for kernel
