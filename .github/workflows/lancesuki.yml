@@ -156,7 +156,7 @@ jobs:
         cp ../susfs4ksu/kernel_patches/50_add_susfs_in_kernel-*.patch .
         patch -p1 < 50_add_susfs_in_kernel-*.patch || echo "Patch Kernel conflict, proceeding..."
 
-    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES (New Fix: kernel_umount.c) ---
+    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES (New Fix: supercalls.c) ---
     - name: Fix SukiSU on Kernel 4.14
       if: env.ENABLE_KERNELSU == 'true'
       run: |
@@ -196,8 +196,18 @@ jobs:
         echo "Fixing setuid_hook.c..."
         sed -i 's/force_sig(SIGKILL)/force_sig(SIGKILL, current)/g' setuid_hook.c
 
-        echo "Fixing kernel_umount.c (NEW)..."
+        echo "Fixing kernel_umount.c..."
         sed -i 's/TWA_RESUME/true/g' kernel_umount.c
+
+        echo "Fixing supercalls.c (NEW)..."
+        # Ganti ksys_close -> sys_close
+        sed -i 's/ksys_close/sys_close/g' supercalls.c
+        # Ganti TWA_RESUME -> true
+        sed -i 's/TWA_RESUME/true/g' supercalls.c
+        # Inject macro anon_inode_getfd_secure -> anon_inode_getfd (old API)
+        sed -i '1i #define anon_inode_getfd_secure(name, fops, priv, flags, context) anon_inode_getfd(name, fops, priv, flags)' supercalls.c
+        # Inject macro selinux_inode -> inode->i_security
+        sed -i '1i #define selinux_inode(inode) (inode->i_security)' supercalls.c
     # ------------------------------------------
 
     - name: Setup Configuration for kernel
