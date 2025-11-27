@@ -156,75 +156,76 @@ jobs:
         cp ../susfs4ksu/kernel_patches/50_add_susfs_in_kernel-*.patch .
         patch -p1 < 50_add_susfs_in_kernel-*.patch || echo "Patch Kernel conflict, proceeding..."
 
-    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES (FIXED FILE_WRAPPER LOGIC) ---
+    # --- UPDATE: FIX ALL KERNEL 4.14 ISSUES (CLEAN FIX FOR FILE_WRAPPER) ---
     - name: Fix SukiSU on Kernel 4.14
       if: env.ENABLE_KERNELSU == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/drivers/kernelsu
         
-        # --- KSU.C ---
+        echo "Fixing ksu.c..."
         sed -i '/MODULE_IMPORT_NS/d' ksu.c
         sed -i '/module_exit(ksu_kernelsu_exit);/i void ksu_kernelsu_exit(void) {}' ksu.c
 
-        # --- ALLOWLIST.C ---
+        echo "Fixing allowlist.c..."
         sed -i 's/TWA_RESUME/true/g' allowlist.c
         sed -i '1i #include <linux/sched/task.h>' allowlist.c
 
-        # --- APP_PROFILE.C ---
+        echo "Fixing app_profile.c..."
         sed -i '/filter_count/d' app_profile.c
         
-        # --- SUCOMPAT.C ---
+        echo "Fixing sucompat.c..."
         sed -i 's/strncpy_from_user_nofault/strncpy_from_user/g' sucompat.c
         
-        # --- SYSCALL_HOOK_MANAGER.C ---
+        echo "Fixing syscall_hook_manager.c..."
         sed -i '/case __NR_clone3:/d' syscall_hook_manager.c
         sed -i 's/|| id == __NR_clone3//g' syscall_hook_manager.c
         sed -i 's/strncpy_from_user_nofault/strncpy_from_user/g' syscall_hook_manager.c
         
-        # --- THRONE_TRACKER.C ---
+        echo "Fixing throne_tracker.c..."
         sed -i 's/is_manager_apk/ksu_is_manager_apk/g' throne_tracker.c
         sed -i '1i #include <linux/types.h>' throne_tracker.c
         sed -i '2i extern bool ksu_is_manager_apk(char *path);' throne_tracker.c
 
-        # --- PKG_OBSERVER.C ---
+        echo "Fixing pkg_observer.c..."
         sed -i '/\.handle_inode_event/d' pkg_observer.c
         sed -i '1i #define fsnotify_add_inode_mark(m,i,f) (0)' pkg_observer.c
 
-        # --- UMOUNT_MANAGER.C ---
+        echo "Fixing umount_manager.c..."
         sed -i '1i #ifndef MNT_DETACH\n#define MNT_DETACH 2\n#endif' umount_manager.c
 
-        # --- SETUID_HOOK.C ---
+        echo "Fixing setuid_hook.c..."
         sed -i 's/force_sig(SIGKILL)/force_sig(SIGKILL, current)/g' setuid_hook.c
 
-        # --- KERNEL_UMOUNT.C ---
+        echo "Fixing kernel_umount.c..."
         sed -i 's/TWA_RESUME/true/g' kernel_umount.c
 
-        # --- SUPERCALLS.C ---
+        echo "Fixing supercalls.c..."
         sed -i 's/ksys_close/sys_close/g' supercalls.c
         sed -i 's/TWA_RESUME/true/g' supercalls.c
         sed -i '1i #define anon_inode_getfd_secure(name, fops, priv, flags, context) anon_inode_getfd(name, fops, priv, flags)' supercalls.c
         sed -i '1i #define selinux_inode(inode) (inode->i_security)' supercalls.c
 
-        # --- KSUD.C ---
+        echo "Fixing ksud.c..."
         sed -i 's/strncpy_from_user_nofault/strncpy_from_user/g' ksud.c
         sed -i 's/TWA_RESUME/true/g' ksud.c
 
-        # --- FILE_WRAPPER.C (MAJOR FIX) ---
+        echo "Fixing file_wrapper.c (CLEAN METHOD)..."
         # 1. Fix Type
         sed -i 's/__poll_t/unsigned int/g' file_wrapper.c
         
-        # 2. Hapus assignment di struct (Safe delete)
+        # 2. Delete Assignments in Struct (Safe)
         sed -i '/\.iopoll =/d' file_wrapper.c
         sed -i '/\.remap_file_range =/d' file_wrapper.c
         sed -i '/\.fadvise =/d' file_wrapper.c
         sed -i '/\.mmap_supported_flags =/d' file_wrapper.c
         
-        # 3. Matikan isi fungsi wrapper (Ganti logic dengan return 0)
-        # Ini mengganti baris panggilan fungsi dengan return 0; // comment
-        # Sehingga kurung kurawal tetap aman.
-        sed -i 's/orig->f_op->iopoll/0; \/\//g' file_wrapper.c
-        sed -i 's/orig->f_op->remap_file_range/0; \/\//g' file_wrapper.c
-        sed -i 's/orig->f_op->fadvise/0; \/\//g' file_wrapper.c
+        # 3. Delete Usage Lines (Safe delete for optional features inside wrappers)
+        sed -i '/remap_file_range/d' file_wrapper.c
+        sed -i '/fadvise/d' file_wrapper.c
+        sed -i '/mmap_supported_flags/d' file_wrapper.c
+        
+        # 4. Fix iopoll (Replace usage with safe return)
+        sed -i 's/.*->iopoll.*/return 0;/' file_wrapper.c
     # ------------------------------------------
 
     - name: Setup Configuration for kernel
